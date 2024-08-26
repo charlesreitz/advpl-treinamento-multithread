@@ -1,0 +1,455 @@
+#include 'tlpp-core.th'
+#include 'tlpp-rest.th'
+#INCLUDE "FILEIO.CH"
+#include 'protheus.ch'
+#DEFINE CRLF CHR(13)+CHR(10)
+Static cLogTail		:=	""
+Static oTMultiget	:=	nil
+Static nLimiteGet	:=	40 // linhas
+Static nLimiteC		:=	00
+Static aColums
+Static cAgrupador := 'importasb1'
+/*/
+
+Realiza a importação de um documento de saida com base o XML gerado.
+
+@author CHARLES REITZ
+@since 12/01/2024
+/*/
+User Function ImportaSB1()
+	TailLog({|| ImportaSB1Processamento() })
+Return nil
+
+/*/
+
+	Usado para testes
+
+	@author CHARLES REITZ
+	@since 12/01/2024
+/*/
+User Function ImportaSB1Direto()
+	RpcSetEnv("10","0101")
+	// RpcSetEnv("T1","M MG 01")
+	TailLog({|| ImportaSB1Processamento() })
+	RpcClearEnv()
+Return nil
+
+
+
+/*/{Protheus.doc} function_method_class_name
+
+Inicia o processamento
+
+@author CHARLES REITZ 
+@SINCE 11/01/2023
+/*/
+Static Function ImportaSB1Processamento()
+	Local cFolderXML	:=	"C:\temp\IMPXMLPED\"
+	Local nI
+	Private cUUid := dtos(date())+"_"+strtran(time(),":","")+"_"+cvaltochar(ThreadID())
+	Private lDebug 		:=	.T.
+
+	// FWAlertInfo("Essa rotina tem como objetivo importar o XML do cliente para o documento de saida direto no fiscal. Ao selecionar a pasta, o programa vai importar todos os arquivos XML's que estiverem dentro dessa pasta.")
+
+	Begin Sequence
+		cFolderXML := tFileDialog( "All files (*.*) | All Text files (*.csv) ", 'Pasta dos XMLs',,, .F., GETF_RETDIRECTORY )+"\"
+
+		// If !MsgYesNo("Continuar com importação de pedidos") --
+		// 	Break
+		// EndIf
+
+		If !ExistDir(cFolderXML)
+			msgStop("Diretório padrão para localizar os arquivos não localizado, crie e salve no diretório "+cFolderXML)
+			Break
+		EndIF
+
+		cFolderProcessado := cFolderXML+"PROCESADO"
+		MakeDir(cFolderProcessado)
+
+		cFolderProcessadoDate := cFolderProcessado+"\"+dtos(Date())
+		MakeDir(cFolderProcessadoDate)
+
+		cFolderProcessadoDateHora := cFolderProcessadoDate+"\"+strtran(Time(),":","")
+		MakeDir(cFolderProcessadoDateHora)
+
+		aCSVFILES := Directory(cFolderXML+"/*.csv*", "S")
+
+		TailLogAdd(cUUid,"Total de "+strzero(len(aCSVFILES),6)+" arquivos localizados")
+		nTotSucc	:=	0
+		nTotFail	:=	0
+		For nI	:=	 1 to len(aCSVFILES)
+			TailLogAdd(cUUid,"Iniciando processamento arquivo "+aCSVFILES[nI][1])
+
+			If ProcessaSB1(aCSVFILES[nI][1],cFolderXML,cUUid)
+				nTotSucc++
+				__CopyFile(cFolderXML+aCSVFILES[nI][1],cFolderProcessadoDateHora+"\"+aCSVFILES[nI][1])
+				sleep(100)
+				FErase(cFolderXML+aCSVFILES[nI][1])
+			Else
+				nTotFail++
+			EndIf
+
+		Next
+		cLocLog	:=	TailLogAdd(cUUid,"Total de registros "+strzero(len(aCSVFILES),6)+", total de falhas "+strzero(nTotFail,6)+", total de sucesso "+strzero(nTotSucc,6))
+		TailLogAdd(cUUid,"#######################################################")
+		TailLogAdd(cUUid,"Log salvo em "+cFolderXML)
+		TailLogAdd(cUUid,"#######################################################")
+
+
+		If FIle(cLocLog) //.AND. !IsBlind()
+			If CpyS2T(cLocLog, cFolderXML, .T. )
+				cDrive	:=	""
+				cDir	:=	""
+				cNome	:=	""
+				cExt	:= ""
+				SplitPath(cLocLog, @cDrive, @cDir, @cNome, @cExt )
+				If ShellExecute("Open",cNome+cExt,"", cFolderXML,3) == 0
+					MsgStop("Não foi possível abrir o arquivo de LOG, verifique no caminho ->"+GetTempPath(.T.)+'\'+cLocLog,"Atenção - "+Procname()+" - "+cvaltochar(procLine()))
+				EndIf
+			Else
+				MsgStop("Não foi possível copiar o arquivo para máquina local","Atenção - "+Procname()+" - "+cvaltochar(procLine()))
+			EndIf
+		EndIf
+	End Sequence
+
+
+Return nil
+
+
+
+
+/*/{Protheus.doc} RUNMT410
+
+Processa inclusado do pedido de venda com base no xml
+
+@author totvs
+@since 15/06/2017
+@version undefined
+@param cFileXML, characters, descricao
+@return return, return_description
+@example
+(examples)
+@see (links_or_references)
+/*/
+Static Function ProcessaSB1(cFileXML,cPathXML,cUUid)
+	Local lRet			:=	.F.
+	Local cTimeIni		:= Time()
+	Local cSemaphore	:=	ProcName()
+	Static cMAFisOPer	:= "03" // TES INTELIGENTE
+
+
+	Begin Sequence
+
+		If !File(cPathXML+cFileXML)
+			//MsgStop("Arquivo não localizado "+cFileXML)
+			TailLogAdd(cUUid,"Arquivo não localizado "+cFileXML,"2")
+			Break
+		EndIf
+
+		nHdlMod := FT_FUse(Alltrim(cPathXML+cFileXML))
+		If nHdlMod == -1
+			//MsgStop("O arquivo de nome " + AllTrim(cFileXML) + " nao pode ser aberto","Atenção - "+ProcName())
+			TailLogAdd(cUUid,"O arquivo de nome " + AllTrim(cFileXML) + " nao pode ser aberto","2")
+			lRet = .F.
+		Endif
+
+		oIPC := FWIPCWait():New(cSemaphore,10000)
+		oIPC:SetThreads(15)
+		oIPC:SetEnvironment(FWGrpCompany(),FWCodFil())
+		oIPC:Start("U_RunExecAutoImp")
+		oIPC:StopProcessOnError(.T.)
+		oIPC:SetNoErrorStop(.T.) //Se der erro em alguma thread sai imediatamente --
+		nProc   := 1
+		lCol := .T.
+		cXml := ""
+		FT_FGOTOP()
+		While !FT_FEOF()
+			cLine := FT_FREADLN()
+			If lCol
+				aColums := StrTokArr2(cLine,";")
+				lCol := .F.
+			Else
+				LogMsg("RunExecAutoImp", 0, 6, 1, '', '', "ProcessaSB1 -  !"+cLine )
+
+				If !oIPC:Go(StrTokArr2(cLine,";",.T.),aColums,cUUid)
+					LogMsg("ProcessaSB1", 0, 6, 1, '', '', "ProcessaSB1 -  Erro ipc go")
+					Exit
+				Endif
+				//U_RunExecAutoImp(StrTokArr2(cLine,";",.T.),aColums,cUUid)
+				TailLogAdd(cUUid,"Processando :"+cLine,nil,.F.)
+			Endif
+			FT_FSKIP()
+		EndDo
+		FT_FUSE()
+
+
+
+
+		If oIPC <> nil
+			oIPC:Stop()
+			cError:= oIPC:GetError()
+			oIPC	:=	NIL
+			If !Empty(cError)
+				Help(,,"ERROR",,cError,1,0)
+				LogMsg("ProcessaSB1", 0, 6, 1, '', '', "ProcessaSB1 -  "+"Tempo TOTAL DE PROCESSAMENTO:"+elaptime(cTimeIni,Time()) )
+				Break
+			EndIf
+		EndIf
+
+
+
+
+		lRet	:=	.T.
+	End Sequence
+	LogMsg("ProcessaSB1", 0, 6, 1, '', '', "ProcessaSB1 -  FIM" )
+
+
+Return lRet
+//
+User Function RunExecAutoImp(aLine,aColums,cUUid)
+	Local ni
+	Local oSA1Mod
+	Local lOK 		:= .F.
+	Local cMessage := ""
+	Static oModelMATA010
+
+	LogMsg("RunExecAutoImp", 0, 6, 1, '', '', "RunExecAutoImp -  Iniciado" )
+
+
+	Begin Sequence
+
+		If oModelMATA010 == nil
+			oModelMATA010 := FWLoadModel("MATA010")
+		Endif
+
+		oModelMATA010:SetOperation(3)
+		oModelMATA010:Activate()
+
+		//Pegando o model dos campos da SA1
+		oSA1Mod := oModelMATA010:getModel("SB1MASTER")
+
+		For nI := 1 To Len(aColums)
+			xTipo := GetSx3Cache(aColums[nI] ,  "X3_TIPO" )
+			If xTipo == 'N'
+				xValue		:=	val(strtran(aLine[nI],",","."))
+			ElseIf xTipo == 'D'
+				xValue		:=	stod(aLine[nI])
+			ElseIf xTipo == 'L'
+				xValue		:=	Alltrim(aLine[nI])
+			Else
+				xValue		:=	Alltrim(aLine[nI])
+			EndIf
+
+			If SB1->(fieldpos(aColums[nI])>0)
+				If  !oSA1Mod:setValue(	aColums[nI]  ,xValue   )
+					Break
+				Endif
+			Endif
+
+		NEXT
+
+		If  !oModelMATA010:VldData()
+			Break
+		Endif
+
+		If  !oModelMATA010:CommitData()
+			Break
+		EndIf
+
+		lOK := .T.
+		TailLogAdd(cUUid,"`CRIADO!: "+SB1->B1_COD)
+		LogMsg("RunExecAutoImp", 0, 6, 1, '', '', "RunExecAutoImp -  Criado!" )
+
+
+	End Sequence
+
+	IF !lOK
+		If !Empty(oModelMATA010:GetErrorMessage()[4])
+			If !Empty(cMessage)
+				cMessage += ' - '
+			EndIf
+			cMessage += cValToChar(oModelMATA010:GetErrorMessage()[4])
+		ENdIf
+		IF !Empty(oModelMATA010:GetErrorMessage()[5])
+			If !Empty(cMessage)
+				cMessage += ' - '
+			EndIf
+			cMessage += cValToChar(oModelMATA010:GetErrorMessage()[5])
+		EndIf
+		IF !Empty(oModelMATA010:GetErrorMessage()[6])
+			If !Empty(cMessage)
+				cMessage += ' - '
+			EndIf
+			cMessage += cValToChar(oModelMATA010:GetErrorMessage()[6])
+		ENdif
+		If Empty(cMessage)
+			aEval(oModelMATA010:GetErrorMessage(), {|x| cMessage += IIF(Empty(x),"",x+' - ')})
+		Endif
+		TailLogAdd(cUUid,"Errp => "+ cMessage,"2")
+		LogMsg("RunExecAutoImp", 0, 6, 1, '', '', "RunExecAutoImp -  "+cMessage )
+
+	EndIf
+	oModelMATA010:DeActivate()
+	FreeUsedCode(.t.)
+
+	LogMsg("RunExecAutoImp", 0, 6, 1, '', '', "RunExecAutoImp -  Finalizando" )
+
+return .t.
+
+//chama direto
+
+/*/{Protheus.doc} TailLog
+Monta tela de LOG de processamento
+@author totvs
+@since 15/06/2017
+@version undefined
+
+@return return, return_description
+@example
+(examples)
+@see (links_or_references)
+/*/
+Static Function TailLog(bProgIni)
+	DEFINE MSDIALOG oDlgTL TITLE "Importação de notas de saísa via XML NFE - LOG de processamento " FROM 180, 180 TO 800, 1200 PIXEL
+	// oDlgTL:align	:= CONTROL_ALIGN_ALLCLIENT
+	oDlgTL:lMaximized:=.T.
+	oTMultiget 		:= tMultiget():new( 01, 01, {| u | if( pCount() > 0, cLogTail := u, cLogTail ) }, oDlgTL, 260, 92, TFont():New("Courier New",,-17, .T. ) , , , , , .T. )
+	oTMultiget:align		:=	CONTROL_ALIGN_ALLCLIENT
+	ACTIVATE MSDIALOG oDlgTL CENTERED  ON INIT Eval(bProgIni)
+Return
+/*/{Protheus.doc} TailLogAdd
+Adiciona informacoes na tela
+@author totvs
+@since 15/06/2017
+@version undefined
+@param cTetMSG, characters, descricao
+@return return, return_description
+@example
+(examples)
+@see (links_or_references)
+/*/
+Static Function TailLogAdd(cUUid,cTetMSG,cOperLog, llog)
+	Local cReturn
+	Default cTetMSG	:=	""
+	Default llog := .t.
+	nLimiteC++
+	If nLimiteC == nLimiteGet
+		cLogTail	:=	""
+		nLimiteC	:=	0
+		If oTMultiget <> nil
+			oTMultiget:Refresh()
+		Endif
+	EndIf
+
+	If cOperLog  == "2"
+		If oTMultiget <> nil
+			oTMultiget:AppendText(Dtoc(Date())+" "+Time()+' [ERROR] - '+cTetMSG+CRLF )
+		Endif
+		If llog
+			cReturn	:=	GeraLogTxt(cUUid,Dtoc(Date())+" "+Time()+" [ERROR] - "+cTetMSG+CRLF )
+		Endif
+		//oTMultiget:GoEnd()
+		//oTMultiget:Refresh()
+	Else
+		If oTMultiget <> nil
+			oTMultiget:AppendText(Dtoc(Date())+" "+Time()+' [INFO ] - '+cTetMSG+CRLF )
+		Endif
+		If llog
+			cReturn	:=	GeraLogTxt(cUUid,Dtoc(Date())+" "+Time()+" [INFO ] - "+cTetMSG+CRLF )
+		Endif
+		//oTMultiget:GoEnd()
+		//oTMultiget:Refresh()
+	EndIf
+
+	//sysrefresh()
+Return cReturn
+
+
+
+
+/*/{Protheus.doc} logAtoC
+
+Transforma LOG de array em string
+
+@type function
+@author TSC679 - CHARLES REITZ
+@since 07/03/2016
+@version 1.0
+/*/
+Static Function logAtoC(aAutoErro)
+	Local cRet := ""
+	Local _ni   := 1
+
+	FOR _ni := 1 to Len(aAutoErro)
+		cRet += chr(13)+chr(10)+AllTrim(aAutoErro[_ni])
+	NEXT _ni
+
+RETURN cRet
+
+
+
+/*/{Protheus.doc} Ger_aLogAcMailTxt
+
+Grava Log de transacao
+
+@author TSC679 CHARLES REITZ
+@since 24/04/2014
+@version 1.0
+
+@return cMes, Valor do mes em string
+/*/
+Static Function GeraLogTxt(cUUid,_cLogAcMail)
+	Local cLocal 		:= "/log/"+cAgrupador+"/"+cUUid+".log"
+	Local nHandle 		:= 0
+
+	If !ExistDir('/log')
+		MakeDir('/log')
+	EndIF
+
+	If !ExistDir('/log/'+cAgrupador+"/")
+		MakeDir('/log/'+cAgrupador+"/")
+	EndIF
+
+	If File(cLocal)
+		nHandle := FOPEN(cLocal, FO_READWRITE)
+		If nHandle == -1
+			conout("Erro ao criar gravar - ferror " + Str(Ferror())+cLocal)
+		Else //se existir arqruivo adicionar abaixo
+			fSeek(nHandle,0,2)
+			FWrite(nHandle,_cLogAcMail)
+			FClose(nHandle)
+		Endif
+	Else
+		nHandle := fCreate(cLocal,FO_READWRITE)
+		If nHandle = -1
+			conout("Erro ao criar arquivo - ferror " + Str(Ferror())+" "+cLocal)
+		Else   // escreve a hora atual do servidor em string no arquivo
+			fSeek(nHandle,0,2)
+			FWrite(nHandle,_cLogAcMail)
+			FClose(nHandle)
+		EndIf
+	EndIf
+Return cLocal
+
+
+/*/
+	Cadadastra o cliente com os dados da nota -
+
+	@author CHARLES REITZ
+	@since 12/01/2024
+
+/*/
+
+
+
+static function ToFone(cFone)
+	local cNovoFone := ""
+	local nCont
+
+	for nCont := 1 to len(cFone)
+		if !SUBSTR(cFone,nCont,1) $ ('(,), ,-')
+			cNovoFone += SUBSTR(cFone,nCont,1)
+		endif
+	next nCont
+
+return cNovoFone
