@@ -1,0 +1,83 @@
+#include 'tlpp-core.th'
+/*/{Protheus.doc} function
+
+    Exemplo multthread com FWGridProcess
+
+    @author  Charles Reitz
+    @since   30/08/2024
+/*/
+User Function FWGRID()
+	Local lEnd
+	Local cPerg := ""
+	Local cDesc := "MinhaFuncaoComClasseFWGridProcess"
+	Local cDescFull := "MinhaFuncaoComClasseFWGridProcess descricao completa"
+
+	oGrid:=FWGridProcess():New(ProcName(),cDesc,cDescFull,{|oGrid,lEnd| U_MinhaFuncaoFWGridProcessQueVaiExecutar(oGrid,@lEnd)},cPerg,"U_MinhaFuncaoFWGridProcessQueVaiExecutarOProcesso")
+	oGrid:SetMeters(2)
+	oGrid:SetThreadGrid(3)
+	oGrid:SetMaxThreadGrid(10)
+	oGrid:SetAbort(.T.)
+	oGrid:Activate()
+
+	If oGrid:IsFinished()
+		FwAlertSucess("Processo finalizado! Avalie o log que será aberto a seguir para identificar possíveis falhas de importação")
+	Else
+		FWAlertError("Processo finalizado com erro!"+chr(13)+chr(10)+oGrid:GetLastLog())
+	EndIf
+	oGrid:DEACTIVATE()
+	oGrid:=NIL
+	FreeObj(oGrid)
+Return
+
+User Function MinhaFuncaoFWGridProcessQueVaiExecutar(oGrid,lEnd)
+	Local nI
+	Local cTimeIni		:= Time()
+
+	oGrid:SetMaxMeter(4,1)
+
+
+	oGrid:SetIncMeter(1,"Verificando produtos a serem enviados ao magento")
+
+	nTotal := 1000
+
+	oGrid:SetMaxMeter(nTotal,2)
+
+	For nI := 1 To nTotal
+
+
+		If KillApp()
+			Return
+		EndIf
+
+		If lEnd
+			Return
+		EndIf
+
+		oGrid:SetIncMeter(2,"Processando Nota "+alltrim(str(nI))+"/"+alltrim(str(nTotal)))
+
+		If !oGrid:CallExecute("parametro1",10)
+			LogMsg("FWGridProcess", 0, 6, 1, '', '', "FWGridProcess -  Erro" )
+
+			Return .F.
+		Endif
+
+
+	Next
+
+
+	LogMsg("FWGridProcess", 0, 6, 1, '', '', "FWGridProcess -  "+"Tempo TOTAL DE PROCESSAMENTO:"+elaptime(cTimeIni,Time()) )
+
+
+
+Return .T.
+
+/*/{Protheus.doc} function - 
+    Função que vai executar o processo
+    @author  Charles Reitz
+    @since   30/08/2024
+/*/
+User Function MinhaFuncaoFWGridProcessQueVaiExecutarOProcesso(cParametro1, nParametro2)
+
+	LogMsg("FWGridProcess", 0, 6, 1, '', '', "FWGridProcess - MinhaFuncaoQueVaiExecutarOProcesso -  Executando - Thread: "+alltrim(str(ThreadId()))+" - Parametro 1:"+cParametro1+" Parametro 2: "+alltrim(str(nParametro2)) )
+
+Return .T.

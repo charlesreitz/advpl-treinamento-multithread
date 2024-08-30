@@ -7,12 +7,51 @@
 			"name": "TOTVS Language Debug",
 			"program": "${command:AskForProgramName}",
 			"cwb": "${workspaceFolder}",
-			"smartclientBin": "../totvs/bin/smartclient/smartclient.exe",
+			"smartclientBin": "C://TOTVS12_2310//tec//smartclient//smartclient.exe",
 			"isMultiSession": true,
 			"enableTableSync": true,
 			"extendFeatures": {
 				"charDetails": false
 			}
 		}
+	],
+	"lastPrograms": [
+		{
+			"label": "tlpp.environment.getIncludesTLPP"
+		},
+		{
+			"label": "u_MinhaFuncaoComClasseFWIPCWait"
+		},
+		{
+			"label": "SIGAMDI"
+		},
+		{
+			"args": [
+				"5",
+				"u_MinhaFuncaoComClasseFWGridProcess"
+			],
+			"label": "sigabpm "
+		},
+		{
+			"args": [
+				"5",
+				"U_FWGRID"
+			],
+			"label": "SIGABPM "
+		},
+		{
+			"label": "u_GRIDServer"
+		},
+		{
+			"label": "u_IPCGO"
+		},
+		{
+			"label": "u_startIPC"
+		}
+	],
+	"lastProgramExecuted": "u_startIPC",
+	"lastProgramArguments": [
+		"5",
+		"u_MinhaFuncaoComClasseFWGridProcess"
 	]
 }

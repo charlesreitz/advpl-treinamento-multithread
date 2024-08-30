@@ -1,0 +1,62 @@
+#include 'tlpp-core.th'
+/*/{Protheus.doc} function
+
+    Exemplo multthread com FWIPCWait
+
+    @author  Charles Reitz
+    @since   30/08/2024
+/*/
+User Function MinhaFuncaoComClasseFWIPCWait()
+	Local cSemaphore	:=	"MEUSEM"
+	Local cTimeIni		:= Time()
+	Local nI
+
+	RpcSetEnv("T1","D MG 01 ")
+
+	LogMsg("FWIPCWait", 0, 6, 1, '', '', "FWIPCWait -  Iniciando" )
+
+	oIPC := FWIPCWait():New(cSemaphore,10000)
+	oIPC:SetThreads(10) // Define o numero de threads
+	oIPC:SetEnvironment(FWGrpCompany(),FWCodFil()) //Define os dados da empresa e filial -
+	oIPC:Start("U_MinhaFuncaoQueVaiExecutarOProcesso")
+	oIPC:StopProcessOnError(.T.)
+	oIPC:SetNoErrorStop(.T.) //Se der erro em alguma thread sai imediatamente
+
+	For nI := 1 To 1000
+
+		If KillApp()
+			Return
+		EndIf
+        
+		If !oIPC:Go('Parametro 1', 10,  { 'Parametro 3' }, .F.)
+			LogMsg("ProcessaSB1", 0, 6, 1, '', '', "ProcessaSB1 -  Erro ipc go")
+			Exit
+		Endif
+
+	Next
+
+	oIPC:Stop()
+	cError:= oIPC:GetError()
+
+	If !Empty(cError)
+		LogMsg("FWIPCWait", 0, 6, 1, '', '', "FWIPCWait -  "+cError )
+	EndIf
+
+	LogMsg("FWIPCWait", 0, 6, 1, '', '', "FWIPCWait -  "+"Tempo TOTAL DE PROCESSAMENTO:"+elaptime(cTimeIni,Time()) )
+
+	oIPC	:=	NIL
+	FreeObj(oIPC)
+
+	RpcClearEnv()
+Return
+
+/*/{Protheus.doc} function - 
+    Função que vai executar o processo
+    @author  Charles Reitz
+    @since   30/08/2024
+/*/
+User Function MinhaFuncaoQueVaiExecutarOProcesso(cParametro1, nParametro2)
+
+	LogMsg("FWIPCWait", 0, 6, 1, '', '', "FWIPCWait - MinhaFuncaoQueVaiExecutarOProcesso -  Executando - Thread: "+alltrim(str(ThreadId()))+" - Parametro 1:"+cParametro1+" Parametro 2: "+alltrim(str(nParametro2)) )
+
+Return .T.

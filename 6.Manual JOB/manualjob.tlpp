@@ -1,0 +1,61 @@
+/*
+ * uso:
+ *      Para criar o servico chame:             u_startIPC ( uma vez so )
+ *      Para conectar/rodar as execucoes chame: u_connIPC  ( quantas vezes quiser usar o servico )
+ */
+
+Static cSEMAFORO := "MYIPC"
+
+/*
+ * Cria o ManualJob
+ */
+Function u_startIPC()
+	Local cEnv := GetEnvServer()
+	Local ni 
+	
+	ConOut("Thread: " + cValToChar(ThreadId()) + " ManualJob: " + cSEMAFORO)
+	ManualJob(cSEMAFORO, cEnv, "IPC", "u_RJobStart", "u_RJobConn", "u_RJobExit", "", 1000, 2, 5, 1, 1)
+
+	For nI := 1 To 100
+
+		U_connIPC()
+		sleep(1000)
+	Next
+Return .T.
+
+/*
+ * Funcao que sera chamada na ativacao de cada thread do Job
+ */
+Function u_RJobStart()
+	ConOut("Thread iniciando:   " + cValToChar(ThreadId()) + " Data atual " + cValToChar(date()) + " " + cValToChar(time()) + " " + ProcName() + " -> " + cSEMAFORO)
+Return .T.
+
+/*
+ * Funcao que sera chamada a cada uso
+ */
+Function u_RJobConn(cVal)
+	ConOut("Thread tratando:    " + cValToChar(ThreadId()) + " Data atual " + cValToChar(date()) + " " + cValToChar(time()) + " " + ProcName() + " -> " + cSEMAFORO + " Parametro: '" + cValToChar(cVal) + "'")
+Return .T.
+
+/*
+ * Funcao que sera chamada na finalizacao de cada thread do Job
+ */
+Function u_RJobExit()
+	ConOut("Thread finalizando: " + cValToChar(ThreadId()) + " Data atual " + cValToChar(date()) + " " + cValToChar(time()) + " " + ProcName() + " -> " + cSEMAFORO)
+Return .T.
+
+/*
+ * Executa o ManualJob
+ * Obs. IPCGo - pode ser invodado de qualquer programa, desde que passe o mesmo nome de semaforo (cSEMAFORO)("MYIPC")
+ */
+Function u_connIPC()
+	Local cPar := "Thread chamando:    " + cValToChar(ThreadId()) + " Data atual " + cValToChar(date()) + " " + cValToChar(time())
+	Local lRet := .F.
+  /*
+   * Executa o ManualJob, podendo passar parametros
+   */
+	ConOut("Estou passando o servico: '" + cPar + "'")
+	lRet := IPCGo(cSEMAFORO, cPar)
+	ConOut("Estou passou   o servico: '" + cPar + "' " + " retorno: " + cValToChar(lRet) + IIf(lRet, " passado com sucesso", " nao conseguiu passar"))
+
+Return .T.

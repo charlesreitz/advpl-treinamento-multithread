@@ -153,12 +153,8 @@ Static Function ProcessaSB1(cFileXML,cPathXML,cUUid)
 			lRet = .F.
 		Endif
 
-		oIPC := FWIPCWait():New(cSemaphore,10000)
-		oIPC:SetThreads(15)
-		oIPC:SetEnvironment(FWGrpCompany(),FWCodFil())
-		oIPC:Start("U_RunExecAutoImp")
-		oIPC:StopProcessOnError(.T.)
-		oIPC:SetNoErrorStop(.T.) //Se der erro em alguma thread sai imediatamente --
+
+
 		nProc   := 1
 		lCol := .T.
 		cXml := ""
@@ -171,32 +167,15 @@ Static Function ProcessaSB1(cFileXML,cPathXML,cUUid)
 			Else
 				LogMsg("RunExecAutoImp", 0, 6, 1, '', '', "ProcessaSB1 -  !"+cLine )
 
-				If !oIPC:Go(StrTokArr2(cLine,";",.T.),aColums,cUUid)
-					LogMsg("ProcessaSB1", 0, 6, 1, '', '', "ProcessaSB1 -  Erro ipc go")
-					Exit
-				Endif
-				//U_RunExecAutoImp(StrTokArr2(cLine,";",.T.),aColums,cUUid)
+
+				U_RunExecAutoImp(StrTokArr2(cLine,";",.T.),aColums,cUUid)
+
+
 				TailLogAdd(cUUid,"Processando :"+cLine,nil,.F.)
 			Endif
 			FT_FSKIP()
 		EndDo
 		FT_FUSE()
-
-
-
-
-		If oIPC <> nil
-			oIPC:Stop()
-			cError:= oIPC:GetError()
-			oIPC	:=	NIL
-			If !Empty(cError)
-				Help(,,"ERROR",,cError,1,0)
-				LogMsg("ProcessaSB1", 0, 6, 1, '', '', "ProcessaSB1 -  "+"Tempo TOTAL DE PROCESSAMENTO:"+elaptime(cTimeIni,Time()) )
-				Break
-			EndIf
-		EndIf
-
-
 
 
 		lRet	:=	.T.
@@ -205,6 +184,7 @@ Static Function ProcessaSB1(cFileXML,cPathXML,cUUid)
 
 
 Return lRet
+
 //
 User Function RunExecAutoImp(aLine,aColums,cUUid)
 	Local ni

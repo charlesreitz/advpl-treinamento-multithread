@@ -1,0 +1,114 @@
+/*/{Protheus.doc} nomeFunction
+
+Processamento em GRID protheus, mesmo processo usando no calculo da folhao do RH
+
+https://tdn.totvs.com/display/public/framework/GridServer+-+Como+configurar
+
+@type user function
+@author CHARLES REITZ
+@since 30/08/2024
+
+/*/
+	STATIC _ReqNum := 0
+
+User Function GRIDServer()
+	Local aStart := {1,2}
+	Local oGrid
+	Local nTimer := seconds()
+	Local lGridOk := .f. , nI
+    Local nProc := 1000
+
+	// Cria o objeto Client de interface com o Grid
+	oGrid := GridClient():New()
+
+	// Define o nome das funções de preparação de ambiente e execução
+	cFnStart  := 'U_TGRIDS'
+	cFnExec  := 'U_TGRIDA'
+	lGridOk := oGrid:Prepare(cFnStart,aStart,cfnExec)
+	If !lGridOk
+		// Caso o Grid não tenha sido preparado com sucesso, recupere
+		// os detalhes e mensagem de erro através do método GetError()
+		MsgStop(oGrid:GetError(),"Falha de Preparação do Grid")
+
+		// Finaliza o processo
+		oGrid:Terminate()
+
+		// Este objeto não pode ser mais usado . Limpa
+		oGrid := NIL
+		Return
+	Endif
+
+	// Parte pra execução – Envio de 200 requisições
+	For nI := 1 to nProc
+		// Looping de envio de dados
+		// O parâmetro de execução enviado é un número
+		lGridOk := oGrid:Execute(nI)
+		If !lGridOk
+			EXIT
+		Endif
+        
+	Next
+
+	If lGridOk
+		// Até aqui, sem erros? Ok, finaliza o Grid.
+		lGridOk := oGrid:Terminate()
+	Endif
+
+	IF !lGridOk
+		// Houve algum erro, ou no processamento, ou na
+		// finalização do Grid. Verifica os arrays de propriedades
+		If !empty(oGrid:aErrorProc)
+			// Houve um ou mais erros fatais que abortaram o processo
+			// [1] : Número sequencial da instrução enviada que não foi processada
+			// [2] : Parâmetro enviado para processamento
+			// [3] : Identificação do Agente onde ocorreu o erro
+			// [4] : Detalhes da ocorrência de erro
+			varinfo('ERR',oGrid:aErrorProc)
+		Endif
+		If !empty(oGrid:aSendProc)
+			// retorna lista de chamadas que foram enviadas e não foram executadas
+			// [1] Número sequencial da instrução
+			// [2] Parâmetro de envio
+			// [3] Identificação do Agente que recebeu a requisição
+			varinfo('PND',oGrid:aSendProc)
+		Endif
+		MsgStop(oGrid:GetError(),"Falha de Processamento em Grid")
+	Else
+		// Tudo certo
+		MsgInfo("Processamento completo com sucesso em "+strzero(seconds()-nTimer,3), "Processamento em Grid")
+	Endif
+Return
+
+// =====================================================================
+// Preparação de ambiente
+// Executada por cada agente, para preparar o ambiente para rodar
+// a função de processamento do Grid
+// Num Grid para executar funções que dependem de infraestrutura do ERP,
+// neste ponto deve ser colocado um PREPARE ENVIRONMENT
+// =====================================================================
+
+USER Function TGRIDS()
+	LogMsg("GRID", 0, 6, 1, '', '', "["+ alltrim(str(ThreadId()))+"][DEMO] Preparando Ambiente ")
+
+	// Espera randômica, para consumir algum tempo  (de 1 a 10 segundos )
+	sleep( Randomize(1000,10000) )
+	LogMsg("GRID", 0, 6, 1, '', '', "["+ alltrim(str(ThreadId()))+"][DEMO] Ambiente Preparado")
+
+Return .T.
+// =====================================================================
+// Execução de Requisições de Processamento
+// Recebe como parâmetro o conteúdo informado ao método Execute()
+// Caso não haja nenhuma necessidade de conteúdo retornado
+// diretamente pela chamada, a função deve retornar NIL.
+// Caso seja retornado qualquer outro valor, ele será
+// armazenado pelo GridClient e poderá ser recuperado posteriormente
+// =====================================================================
+
+USER Function TGRIDA(xParam)
+// Espera randômica, para consumir algum tempo ( entre 0,5 e 5 segundos )
+	LogMsg("GRID", 0, 6, 1, '', '', "["+ alltrim(str(ThreadId()))+"][DEMO] REQUISICAO ["+str(++_ReqNum,4)+"] OK")
+
+	sleep( Randomize(500,5000) )
+
+
+Return

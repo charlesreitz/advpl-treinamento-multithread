@@ -1,0 +1,36 @@
+#DEFINE SEMAFORO 'IDUNICOTESTE'
+
+#DEFINE SEMAFORO 'IDUNICOTESTE'
+
+User Function IPCGO()
+    Local nI 
+
+	LogMsg("FWIPCWait", 0, 6, 1, '', '', "IPCGO -  Iniciado Threads" )
+
+	StartJob("U_IPCJOBS",GetEnvServer(),.F.)
+	StartJob("U_IPCJOBS",GetEnvServer(),.F.)
+
+
+	Sleep( 5000 )
+
+    For nI := 1 To 1000
+	    IPCGO( SEMAFORO, "Data atual " + cvaltochar(date()+nI) )
+        LogMsg("FWIPCWait", 0, 6, 1, '', '', "IPCGO -  IPCGO - " +str(nI))
+        sleep(500)
+    Next
+    LogMsg("FWIPCWait", 0, 6, 1, '', '', "IPCGO -  Finalizando" )
+Return
+
+User Function IPCJOBS()
+	Local cPar
+
+	While !killapp()
+
+		lRet := IpcWaitEx( SEMAFORO, 5000, @cPar )
+		if lRet
+            LogMsg("FWIPCWait", 0, 6, 1, '', '', "["+alltrim(str(ThreadId()))+"]IPCGO - " - cPar )
+		endif
+
+	Enddo
+
+Return
