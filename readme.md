@@ -33,7 +33,7 @@
 
 ## Referências 
 
-### Grid 
+### Grid  Server
 - https://tdn.totvs.com/display/public/framework/GridServer+-+Como+configurar
 - https://tdn.totvs.com/display/public/framework/Grid+de+Processamento+AdvPL+-+INTERNA
 
